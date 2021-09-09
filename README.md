@@ -4,7 +4,7 @@ BoxRec Python
 The BoxRec Python package provides functions to compute **recurrence lacunarity** as described in [[braun2021] (Open Source)](https://link.springer.com/article/10.1007/s11071-021-06457-5#article-info>). Its functionality is very basic at the current stage and will probably be extended in the near future. It also offers a basic implementation for the computation of recurrence plots and the box-counting dimension.
 
 
-<img src="https://github.com/ToBraun/RECLAC/blob/main/icon.png" alt="drawing" width="200"/>
+<img src="https://github.com/ToBraun/RECLAC/blob/main/icon.png" alt="drawing" width="1200"/>
 
 Getting started
 ===============
