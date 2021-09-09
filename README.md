@@ -18,7 +18,7 @@ in your console.
 Requirements
 ====
 
-numpy >= 1.21
+numpy >= 1.21\
 scipy >= 1.2.1
 
 
