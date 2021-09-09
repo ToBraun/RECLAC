@@ -11,7 +11,7 @@ Getting started
 
 Install from [PyPi](https://pypi.org/project/RECLAC/) by simply typing
 
-`<addr>` pip install RECLAC
+`pip install RECLAC` 
 
 in your console.
 
@@ -33,7 +33,12 @@ Citing and reference
 ====================
 If you would like to use the provided tools in your research, please cite
 
-.. [braun2021] Braun, T., Unni, V.R., Sujith, R.I. et al. Detection of dynamical regime transitions with lacunarity as a multiscale recurrence quantification measure. Nonlinear Dyn 104, 3955–3973 (2021). https://doi.org/10.1007/s11071-021-06457-5 <https://link.springer.com/article/10.1007/s11071-021-06457-5>`_, 2021.
+
+-- <cite>
+Braun, T., Unni, V.R., Sujith, R.I. et al. Detection of dynamical regime transitions with lacunarity as a multiscale recurrence quantification measure. Nonlinear Dyn 104, 3955–3973 (2021). [https://doi.org/10.1007/s11071-021-06457-5](https://link.springer.com/article/10.1007/s11071-021-06457-5), 2021.
+</cite>
+
+
 
 or as BiBTeX-entry:
 
