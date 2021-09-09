@@ -43,16 +43,16 @@ or as BiBTeX-entry:
 
 
 
->@article{braun2021detection,
-title={Detection of dynamical regime transitions with lacunarity as a multiscale recurrence quantification measure},
-author={Braun, Tobias and Unni, Vishnu R and Sujith, RI and Kurths, Juergen and Marwan, Norbert},
-journal={Nonlinear Dynamics},
-pages={1--19},
-year={2021},
-publisher={Springer}
+>@article{braun2021detection,\
+title={Detection of dynamical regime transitions with lacunarity as a multiscale recurrence quantification measure},\
+author={Braun, Tobias and Unni, Vishnu R and Sujith, RI and Kurths, Juergen and Marwan, Norbert},\
+journal={Nonlinear Dynamics},\
+pages={1--19},\
+year={2021},\
+publisher={Springer}\
 
 
 
 Licence
 =======
-This is program is free software and runs under `MIT Licence <https://opensource.org/licenses/MIT>`_.
+This is program is free software and runs under [MIT Licence](https://opensource.org/licenses/MIT).
