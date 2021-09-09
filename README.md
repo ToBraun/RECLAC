@@ -11,9 +11,7 @@ Getting started
 
 Install from [PyPi](https://pypi.org/project/RECLAC/) by simply typing
 
-::
-
-   pip install RECLAC
+`<addr>` pip install RECLAC
 
 in your console.
 
