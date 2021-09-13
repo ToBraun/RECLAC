@@ -7,7 +7,7 @@ requirements = ["numpy >= 1.21", "scipy >= 1.2.1"]
 
 setup(
     name="RECLAC",
-    version="0.0.1",
+    version="0.1.1",
     author="Tobias Braun",
     author_email="tobraun@pik-potsdam.de",
     description="A package to compute recurrence lacunarity and other box-counting-based recurrence quantifiers",

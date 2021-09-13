@@ -104,10 +104,11 @@ class Boxcount(RP):
                 Boxcount._stat_count(self, k)
             l_boxc.append(self.S)
         self.counts = l_boxc
+        # 'back-up' (private) variable for self.counts to restore value when self.counts is altered
         self._counts = np.copy(self.counts)
             
     
-
+    # setter
     def _stat_count(self, k):
         """
         Static box-counting algorithm. Computes the box counts for a given (square) box size 'k'.
@@ -128,6 +129,7 @@ class Boxcount(RP):
         self.S = S
     
     
+    # setter
     def _glide_count(self, k, sym):
         """
         Gliding box-counting algorithm. Computes the box counts for a given (square) box size 'k'
@@ -192,7 +194,7 @@ class Boxcount(RP):
         return outp
 
 
-
+    @staticmethod
     def loglog_regress(self, x, y, rmethod='LS', verb=True, estimate=None, regr_param = False):
         """
         Returns the result of a log-log regression. Uses either a least-squares or a (robust)
@@ -235,7 +237,7 @@ class Boxcount(RP):
             return d_res['slope']
 
 
-
+    @staticmethod
     def MLEregr(self, x, y, estimate):
         """
         Returns the result of a maximum likelihood regression. This can be useful if a slope estimate
@@ -279,7 +281,7 @@ class Boxcount(RP):
         return(d_res) 
       
         
-        
+    # getter
     def boxcounts(self):
         """
         Returns the box sizes and box counts.

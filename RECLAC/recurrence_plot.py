@@ -96,6 +96,8 @@ class RP:
         # Set threshold based on one of the four given methods (distance, fixed rr, fixed stdev, fan)
         # and compute recurrence matrix:
         self.R = self.apply_threshold()
+        # 'back-up' (private) variable for self.counts to restore value when self.counts is altered
+        self._R = np.copy(self.R)
 
 
     
@@ -181,4 +183,227 @@ class RP:
         """
         return self.R
     
+
+    
+    def line_hist(self, linetype, border=None):
+        """
+        Extracts all diagonal/vertical lines from a recurrence matrix. The 'linetype'
+        arguments specifies which lines should be analysed. Returns all identified
+        line lengths and the line length histogram.
+        Since the length of border lines is generally unknown, they can be discarded or
+        replaced by the mean/max line length.
+
+        
+        :type linetype: str
+         :arg linetype: specifies whether diagonal ('diag') or vertical ('vert') lines
+                        should be extracted
+        :type border: str
+         :arg border: treatment of border lines: None, 'discard', 'mean' or 'max'
+
+        :rtype: tuple of three 1D float arrays
+         :return: line lengths, bins, histogram
+        """
+        N = self.R.shape[0]
+        a_ll = np.array([])
+        # 'counter' counts border lines
+        counter = 0
+        for n in range(1, N):
+            # grab the n-th diagonal
+            tmp_line = self._extract_line(n, linetype)
+            # run length encoding
+            tmp_rle = RP._rle(tmp_line)
+            
+            ## Border lines
+            if border is not None:
+                if tmp_rle[0][0] == 1:
+                    tmp_rle = tmp_rle[1:,]
+                    counter += 1
+                try:
+                    if tmp_rle[-1][0] == 1: 
+                        tmp_rle = tmp_rle[:-1,]
+                        counter += 1
+                except IndexError:
+                    tmp_rle = tmp_rle
+                    
+            ## Find diagonal lines
+            tmp_ind = np.where(tmp_rle[:,0] == 1)
+            # collect their lengths
+            tmp_lengths = tmp_rle[tmp_ind, 1].ravel()
+            if tmp_lengths.size > 0:
+                a_ll = np.hstack([a_ll, tmp_lengths])
+                ## Append border line substitutes (if desired)
+                if border == 'mean':
+                    avgll = np.mean(a_ll)
+                    a_ll = np.hstack([a_ll, np.repeat(avgll, counter)])
+                elif border == 'max':
+                    maxll = np.max(a_ll)
+                    a_ll = np.hstack([a_ll, np.repeat(maxll, counter)])
+        
+        # any lines?
+        if a_ll.size > 0:                
+            a_bins = np.arange(0.5, np.max(a_ll) + 0.1 + 1, 1.)
+            a_lhist, _ = np.histogram(a_ll, bins=a_bins)
+            return a_ll, a_bins, a_lhist
+        else:
+            raise ValueError("No lines could be identified.")
+            return None
+
+
+
+    def _extract_line(self, n, linetype):
+        """
+        Extracts the n-th diagonal/column from a recurrence matrix, depending on
+        whether diagonal (linetype='diag') or vertical (linetype='vert') lines are
+        desired.
+
+
+        :type n: int
+         :arg n: index of diagonal/column of the RP (0 corresponds to LOI for diagonals)
+        :type linetype: str
+         :arg linetype: specifies whether diagonal ('diag') or vertical ('vert') lines
+                        should be extracted
+
+        :rtype: 1D float array
+         :return: n-th diagonal/column of recurrence matrix
+        """
+        if linetype == 'diag':
+            return np.diag(self.R, n)
+        elif linetype == 'vert':
+            return self.R[:,n]
+        else:
+            print("Specification error: 'linetype' must be one of 'diag' or 'vert'.")
+
+
+
+    @staticmethod
+    def _rle(sequence):
+        """
+        Run length encoding: count consecutive occurences of values in a sequence.
+        Applied to binary sequences (diagonals/columns of recurrence matrix) to obtain
+        line lengths.
+        
+        :type sequence: 1D float array
+         :arg sequence: sequence of values (0s and 1s for recurrence plots)
+
+        :rtype: 2D float array
+         :return: run values (first column) and run lengths (second column)
+        """
+        #src:  https://github.com/alimanfoo
+       ## Run length encoding: Find runs of consecutive items in an array.
+    
+        # ensure array
+        x = np.asanyarray(sequence)
+        if x.ndim != 1:
+            raise ValueError('only 1D array supported')
+        n = x.shape[0]
+    
+        # handle empty array
+        if n == 0:
+            return np.array([]), np.array([]), np.array([])
+    
+        else:
+            # find run starts
+            loc_run_start = np.empty(n, dtype=bool)
+            loc_run_start[0] = True
+            np.not_equal(x[:-1], x[1:], out=loc_run_start[1:])
+            run_starts = np.nonzero(loc_run_start)[0]
+    
+            # find run values
+            run_values = x[loc_run_start]
+    
+            # find run lengths
+            run_lengths = np.diff(np.append(run_starts, n))
+
+            # stack and return
+            return np.vstack([run_values, run_lengths]).T
+
+
+    @staticmethod
+    def _fraction(bins, hist, lmin):
+        """
+        Returns the fraction of lines that are longer than 'lmin' based on the line
+        length histogram. For diagonal (vertical) lines, this corresponds to DET (LAM).
+        
+        :type bins: 1D float array
+         :arg bins: bins of line length histogram
+        :type hist: 1D float array
+         :arg hist: frequencies of line lengths within each bin 
+        :type lmin: int value
+         :arg lmin: minimum line length
+         
+        :rtype: float value
+         :return: fraction of diagonal/vertical lines that exceed 'lmin' (DET/LAM)
+        """
+        # find fraction of lines larger than lmin
+        a_Pl = hist.astype('float')
+        a_l = (0.5 * (bins[:-1] + bins[1:])).astype('int')
+        ind = a_l >= lmin
+        # compute fraction
+        a_ll_large = a_l[ind] * a_Pl[ind]
+        a_ll_all = a_l * a_Pl
+        rq = a_ll_large.sum() / a_ll_all.sum()
+        return rq
+
+
+
+    def RQA(self, lmin, measures = 'all', border=None):
+        """
+        Performs a recurrence quantification analysis (RQA) on a recurrence matrix based on
+        a list of (traditional) recurrence quantification measures. Returns the following
+        nine measures by default:
+        - recurrence rate
+        - DET
+        - average diagonal line length
+        - maximum diagonal line length
+        - LAM
+        - average vertical line length
+        - maximum vertical line length
+        - average white vertical line length(/recurrence time)
+        - maximum white vertical line length(/recurrence time)
+        
+        If only quantifiers based on diagonal/vertical/white lines are desired, this can
+        be restricted with the 'measure' argument.
+        
+        :type lmin: int value
+         :arg lmin: minimum line length
+        :type measures: str
+         :arg measures: determines which recurrence quantification measures are computed
+                        ('all', 'diag', 'vert', 'white')
+        :type border: str
+         :arg border: treatment of border lines: None, 'discard', 'mean' or 'max'
+         
+        :rtype: float dictionary
+         :return: recurrence quantification measures
+        """
+        DET, avgDL, maxDL, LAM, avgVL, maxVL, avgWL, maxWL = np.repeat(None, 8)
+        # recurrence rate
+        rr = np.sum(self.R)/(self.R.size)
+        # diagonal line structures
+        if (measures == 'diag') or (measures == 'all'):
+            a_ll, a_bins, a_nlines  = self.line_hist(linetype='diag', border=border)
+            DET = RP._fraction(bins = a_bins, hist = a_nlines, lmin = lmin)
+            avgDL = np.mean(a_ll)
+            maxDL = np.max(a_ll).astype(int)
+        # vertical line structures
+        if (measures == 'vert') or (measures == 'all'):
+            a_ll, a_bins, a_nlines  = self.line_hist(linetype='vert', border=border)
+            LAM = RP._fraction(bins = a_bins, hist = a_nlines, lmin = lmin)
+            avgVL = np.mean(a_ll)
+            maxVL = np.max(a_ll).astype(int)
+        # white vertical line structures/ recurrence times
+        if (measures == 'white') or (measures == 'all'):
+            self.R = 1 - self.R
+            a_ll, a_bins, a_nlines  = self.line_hist(linetype='vert', border=border)
+            avgWL = np.mean(a_ll)
+            maxWL = np.max(a_ll).astype(int)
+            # restore value
+            self.R = self._R
+        
+        d_rqa = dict([('RR', rr),
+                      ('DET', DET), ('avgDL', avgDL), ('maxDL', maxDL), 
+                      ('LAM', LAM), ('avgVL', avgVL), ('maxVL', maxVL),
+                      ('avgWVL', avgWL), ('maxWVL', maxWL)])
+        
+        return d_rqa
+
 
