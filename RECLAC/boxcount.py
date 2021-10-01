@@ -11,75 +11,84 @@ import scipy.stats as stats
 import scipy.optimize as opt
 
 from .recurrence_plot import RP
-#import sys
-#sys.path.insert(0, "/home/tobraun/Desktop/PhD/projects/#1_lacunarity")
-#from package_alpha.recurrence_plot import RP
+
 
 class Boxcount(RP):
     
-    """
-    Class Boxcount for computing recurrence quantification measures from a box-counting analysis.
-
-    Currently supports the computation of the box-counting dimension and recurrence lacunarity
-    for recurrence plots. Recurrence plots are computed based on the RP-class. 
-    
-    Box-counting can be applied through a (computationally faster) static box-counting algorithm
-    or a more comprehensive gliding box algorithm. For the computation of the box-counting dimension
-    and regression parameters for recurrence lacunarity, a basic least-squares or a more robust 
-    maximum-likelihood regression of the log-counts against the log-sizes are provided.
-    Confidence intervals can be returned based on a bootstrap resampling scheme.
-    
-    If no recurrence plot should be computed but instead is directly given to the box-counting as an input,
-    use 'compute_rp = False'.
-
-
-    **Examples:**
-
-     - Create an instance of Boxcount with fixed recurrence rate of 10% & without embedding and analyse it 
-       with the static box-counting algorithm and a linearly increasing set of boxes. Symmetry is used.
-
-            Boxcount(x, method='frr', thresh=0.1, boxes=np.arange(2, 200), glide=False, sym=True)
-
-     - Create an instance of Boxcount with fixed recurrence rate of 10% & without embedding and analyse it 
-       (after a 90° rotation) with the gliding box-counting algorithm. Return the box-counting dimension.
-
-            bc = Boxcount(x, method='frr', thresh=0.1, boxes=np.arange(2, 200), glide=True, gridpos=1)
-            bc.box_dimension(regression='LS')
-           
-       Directly give a RP as input and compute recurrence lacunarity with full output of regression parameters.
-       Obtain the respective bootstrap distribution based on 2000 bootstrap runs.
-           
-            bc = Boxcount(x, boxes=np.arange(2, 200), compute_rp = False)
-            bc.lacunarity(regression='ML', regr_param=True)
-            bc.resample_counts(output = 'lac', Nb = 2000, regression = 'ML', regr_param = True)
-    """
-    
     def __init__(self, x, boxes, glide = False, gridpos = 0, compute_rp = True, **kwargs):
         """
-        Initialize an instance of Boxcount.
-
-        The following keywords are required: x, boxes, glide, gridpos, compute_rp
-        The sym keyword and the recurrence parameters are optional.
+        Class Boxcount for computing recurrence quantification measures from a box-counting analysis.
+        Currently supports the computation of the box-counting dimension and recurrence lacunarity
+        for recurrence plots. Recurrence plots are computed based on the RP-class. 
         
-        :type x: float array
-         :arg x: either a 1D time series or a 2D recurrence matrix (compute_rp = False)
-        :type boxes: float 1D array
-         :arg boxes: array of boxes sizes (ascending/descending order)
-        :type glide: bool
-         :arg glide: static or gliding box algorithm
-        :type gridpos: float number
-         :arg gridpos: number of 90° rotations to apply to the RP (0,1,2,3)
-        :type compute_rp: bool
-         :arg compute_rp: compute an RP based on RP class or feed one as input
+        Box-counting can be applied through a (computationally faster) static box-counting algorithm
+        or a gliding box algorithm (deprecated). For the computation of the box-counting dimension
+        and regression parameters for recurrence lacunarity, a basic least-squares or a more robust 
+        maximum-likelihood regression of the log-counts against the log-sizes are provided.
+        Confidence intervals can be returned based on a bootstrap resampling scheme.
+        
+        If no recurrence plot should be computed but instead is directly given to the box-counting as an input,
+        use 'compute_rp = False'.
+        
+    Parameters
+    ----------
+        x: 1D array (float)
+            The time series to be analyzed, can be scalar or multi-dimensional.
+        boxes : 1D array (int)
+            array of boxes sizes (ascending order)
+        method: str
+             estimation method for the vicinity threshold 
+             epsilon (`distance`, `frr`, `stdev`, `fan`)
+        thresh: float
+            threshold parameter for the vicinity threshold,
+            depends on the specified method (`epsilon`, 
+            `recurrence rate`, `multiple of standard deviation`,
+            `fixed fraction of neighbours`)
+        glide: bool, optional
+            static or gliding box algorithm
+        gridpos: float, optional
+            number of 90° rotations to apply to the RP (0,1,2,3)
+        compute_rp: bool, optional
+            compute an RP based on RP class or feed one as input
+
+    Examples
+    --------
+    
+    - Create an instance of Boxcount for a realization of a random walk. Generate a recurrence plot
+      and analyse it with the static box-counting algorithm and a logarithmically increasing set of boxes.
+      Symmetry of the RP is used.
+        
+        >>> np.random.seed(123)
+        >>> x = np.cumsum(np.random.normal(0,1,1000))
+        >>> wmin, wmax, N = 0, 2, 100
+        >>> a_boxes = 2*np.unique(np.logspace(wmin, wmax, N, dtype=int))
+        >>> BC = bc.Boxcount(x, method='distance', thresh=2, boxes=a_boxes, glide=False, sym=True)
+        >>> BC
+        <RECLAC.boxcount.Boxcount at 0x7f047c1330b8>
+
+    - Create an instance of Boxcount with fixed recurrence rate of 10% & without embedding and analyse it 
+      (after a 90° rotation) with the static box-counting algorithm.
+      Return the box counts.
+
+        >>> BC = bc.Boxcount(x, method='frr', thresh=0.1, boxes=a_boxes, glide=False, gridpos=1)
+        >>> _, l_counts = BC.boxcounts()
+        >>> l_counts[-1]
+            array([[   2,  146, 8799, 5022, 8738],
+                   [  32,  144, 5397, 7288, 5022],
+                   [   0,   95, 9574, 5397, 8799],
+                   [8484, 8780,   95,  144,  146],
+                   [9378, 8484,    0,   32,    2]])
         """
         if compute_rp:
             method = kwargs.get('method')
             thresh = kwargs.get('thresh')
+            dim = kwargs.get('dim')
+            tau = kwargs.get('tau')
             if (method is None) or (thresh is None):
                 raise NameError("Please provide a method for thresholding and a threshold.")
             assert (x.ndim == 1), "If no recurrence matrix is provided, please provide a 1-dimensional time series."
             #  Initialize the underlying RecurrencePlot object
-            RP.__init__(self, x=x, method=method, thresh=thresh)
+            RP.__init__(self, x=x, method=method, thresh=thresh, dim=dim, tau=tau)
             array = self.R.copy()
         else:
             assert (x.ndim == 2), "If a recurrence matrix is provided, it has to be a 2-dimensional array."
@@ -105,19 +114,24 @@ class Boxcount(RP):
             l_boxc.append(self.S)
         self.counts = l_boxc
         # 'back-up' (private) variable for self.counts to restore value when self.counts is altered
-        self._counts = np.copy(self.counts)
-            
+        self._counts = np.copy(np.array(self.counts, dtype=object))
+          
+        
+        
     
     # setter
     def _stat_count(self, k):
         """
-        Static box-counting algorithm. Computes the box counts for a given (square) box size 'k'.
-
+        Static box-counting algorithm. Computes the box counts for a fixed grid
+        with a given (square) box size 'k'.
+        
         .. note::
            Sets a value for the current box count attribute 'S'. No return value!
-
-        :type k: int number
-         :arg k: box width
+           
+    Parameters
+    ----------
+        k: int
+            box width
         """
         # only evaluate that part of the RP that can be covered without allowing for 
         # 'edge boxes' with different size
@@ -134,14 +148,18 @@ class Boxcount(RP):
         """
         Gliding box-counting algorithm. Computes the box counts for a given (square) box size 'k'
         by gliding over the recurrence plot with a step size of 1. 
-
+        
         .. note::
            Sets a value for the current box count attribute 'S'. No return value!
-
-        :type k: int number
-         :arg k: box width
-        :type sym: bool
-         :arg sym: symmetry of the recurrence marix (True/False)
+           Deprecated due to high computational times. A more efficient algorithm will be
+           implemented.
+        
+    Parameters
+    ----------
+        k: int
+            box width
+        sym: bool
+            use symmetry of the recurrence matrix
         """
         # only evaluate that part of the RP that can be covered without allowing for 
         # 'edge boxes' with different size
@@ -165,19 +183,48 @@ class Boxcount(RP):
         self.S = S
             
 
+
+
     def box_dimension(self, regression, verb=False, **kwargs):
         """
         Returns the box-counting dimension (if 'regression' is not None). 
         Uses the box counts vs box sizes to compute the slope from a log-log-regression.
+        
+    Parameters
+    ----------
+        regression: str
+            method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
+        verb : bool
+            print all regression parameters
 
-        :type regression: str
-         :arg regression: method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
-        :type verb: bool
-         :arg verb: print all regression parameters
-         
-        :rtype: (optional) float tuple/dictionary/number
-         :return: one of a) box sizes and box counts, b) box-counting dimension or
-                  c) full set of regression parameters
+    Returns
+    ------- 
+        : float tuple/dictionary/number (float) depending on 'regression' argument
+            one of a) box sizes and box counts, b) box-counting dimension or c) full set of regression parameters
+
+    Examples
+    --------
+    - Create an instance of Boxcount for a realization of a random walk. Generate a recurrence plot
+      and analyse it with the static box-counting algorithm and a logarithmically increasing set of boxes.
+      Compute the box-counting dimension with maximum likelihood regression and print regression parameters.
+        
+        >>> np.random.seed(123)
+        >>> x = np.cumsum(np.random.normal(0,1,1000))
+        >>> wmin, wmax, N = 0, 2, 100
+        >>> a_boxes = 2*np.unique(np.logspace(wmin, wmax, N, dtype=int))
+        >>> # run the box-counting algorithm
+        >>> BC = bc.Boxcount(x, method='distance', thresh=2, boxes=a_boxes, glide=False)
+        >>> # compute the box-counting dimension:
+        >>> BC.box_dimension(regression='ML', verb = True)
+            {'yinterc': 5.007707585461798, 'slope': -1.5877932599535791, 
+            'stderr': 0.04352819734245077, 'R': -0.9962111634654818}
+            -1.5877932599535791
+    
+    - Return the number of boxes that are required to cover the RP for different box widths:
+
+        >>> t_boxc = BC.box_dimension(regression=None, verb=False)
+        >>> t_boxc[1]
+        array([19450., 11169.,  ...,  23.,    23.])
         """
         # box-counting with increasing box size
         a_covered = np.zeros(self.N)
@@ -189,32 +236,38 @@ class Boxcount(RP):
         if regression is None:
             outp = (self.boxes, a_covered)
         else:
-            outp = self.loglog_regress(x=self.boxes, y=a_covered, rmethod=regression, verb=verb, 
+            outp = Boxcount.loglog_regress(x=self.boxes, y=a_covered, rmethod=regression, verb=verb, 
                                        regr_param=kwargs.get("regr_param"), estimate=kwargs.get("estimate"))
         return outp
 
 
+
+
     @staticmethod
-    def loglog_regress(self, x, y, rmethod='LS', verb=True, estimate=None, regr_param = False):
+    def loglog_regress(x, y, rmethod='LS', verb=True, estimate=None, regr_param = False):
         """
         Returns the result of a log-log regression. Uses either a least-squares or a (robust)
         maximum likelihood estimation procedure. The latter can be useful if a slope estimate
         should be obtained even though outliers exist. It requires an initial estimate on the
         regression parameters. 
+ 
+    Parameters
+    ----------
+        x, y: 1D arrays (float)
+            x- and y-coordinates (logarithmic box sizes and box counts)
+        rmethod : str
+            method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
+        verb: bool
+            print all regression parameters
+        estimate: list (float)
+            initial estimate on regression parameters for ML-regression
+        regr_param: bool
+            return all regression parameters as dictionary
 
-        :type x, y: float array
-         :arg x, y: x- and y-coordinates (logarithmic box sizes and box counts)
-        :type rmethod: str
-         :arg rmethod: method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
-        :type verb: bool
-         :arg verb: print all regression parameters
-        :type estimate: float list
-         :arg estimate: initial estimate on regression parameters for ML-regression
-        :type regr_param: bool
-         :arg regr_param: return all regression parameters as dictionary
-        
-        :rtype: (optional) float dictionary/float number
-         :return: one of a) full set of regression parameters or b) slope of the lac.-regression 
+    Returns
+    -------
+        d_res: dictionary/number (float)
+            one of a) full set of regression parameters or b) slope of the lac.-regression 
         """
         if estimate is None:
             estimate = np.random.normal(0,1,3)
@@ -227,7 +280,7 @@ class Boxcount(RP):
         elif rmethod == 'ML':
             a_fit = np.vstack([np.log10(x), np.log10(y)])
             a_fit = np.where(np.isnan(a_fit), 0, np.where(a_fit ==-np.inf, 0, np.where(a_fit==np.inf, 0, a_fit)))
-            d_res = (self.MLEregr(x = a_fit[0,], y = a_fit[1,], estimate = estimate))
+            d_res = (Boxcount.MLEregr(x = a_fit[0,], y = a_fit[1,], estimate = estimate))
 #        # results
         if verb: 
             print(d_res)
@@ -237,20 +290,26 @@ class Boxcount(RP):
             return d_res['slope']
 
 
+
+
     @staticmethod
-    def MLEregr(self, x, y, estimate):
+    def MLEregr(x, y, estimate):
         """
         Returns the result of a maximum likelihood regression. This can be useful if a slope estimate
         should be obtained even though outliers exist. It requires an initial estimate on the
         regression parameters. 
-    
-        :type x, y: float array
-         :arg x, y: x- and y-coordinates (logarithmic box sizes and box counts)
-        :type estimate: float list
-         :arg estimate: initial estimate on regression parameters for ML-regression
-        
-        :rtype: float dictionary
-         :return: regression parameters: 'y-intercept', 'slope', 'standard error', 'Rsqrd'
+
+    Parameters
+    ----------
+        x, y: 1D arrays (float)
+            x- and y-coordinates (logarithmic box sizes and box counts)
+        estimate: list (float)
+            initial estimate on regression parameters for ML-regression
+
+    Returns
+    -------
+        d_res: dictionary (float)
+            regression parameters: 'y-intercept', 'slope', 'standard error', 'Rsqrd'
         """
         #src : https://towardsdatascience.com/a-gentle-introduction-to-maximum-likelihood-estimation-9fbff27ea12f
         n = len(y)
@@ -281,37 +340,88 @@ class Boxcount(RP):
         return(d_res) 
       
         
+        
+        
     # getter
     def boxcounts(self):
         """
         Returns the box sizes and box counts.
-        :rtype: float tuple
-         :return: box sizes
+        
+    Returns
+    -------
+        : tuple (float)
+            set ox boxes and corresponding counts
         """
         return (self.boxes, self.counts)
+
+
+
+
+    # getter
+    def get_rm(self):
+        """
+        Returns the recurrence plot that is analysed.
+        
+    Returns
+    -------
+        : 2D array (float)
+            recurrence matrix
+        """
+        return self.R
+
 
 
 
     def lacunarity(self, regression, normalized=True, verb=False, **kwargs):
         """
         Returns the recurrence lacunarity, either fully or in terms of regression parameters (e.g. slope)
-        computed from it. Normalization also considers the inverted RP, see
-        >Braun, Tobias, et al. "Detection of dynamical regime transitions with lacunarity as a 
-        multiscale recurrence quantification measure." Nonlinear Dynamics (2021): 1-19.<
+        computed from it. Normalization also considers the inverted RP.
+      
+    Parameters
+    ----------
+        regression: str
+            method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
+        normalized: bool
+            return normalized lacunarity
+        verb : bool
+            print all regression parameters
+        regr_param: bool
+            return all regression parameters as dictionary
+        estimate: list (float)
+            initial estimate on regression parameters for ML-regression
 
+    Returns
+    -------
+        : tuple/float number/dictionary
+            one of a) box sizes and lacunarities, b) slope of the lac.-regression or c) full set of regression parameters
+
+    References
+    -------
+        Braun, Tobias, et al. "Detection of dynamical regime transitions with lacunarity as a 
+        multiscale recurrence quantification measure." Nonlinear Dynamics (2021): 1-19.
+
+    Examples
+    --------
+    - Create an instance of Boxcount for a realization of a random walk. Generate a recurrence plot
+      and analyse it with the static box-counting algorithm and a logarithmically increasing set of boxes.
+      Compute the box-counting dimension with maximum likelihood regression and print regression parameters.
         
-        :type regression: str
-         :arg regression: method for loglog-regression: LS (least-squares), ML (maximum likelihood) or None
-        :type normalized: bool
-         :arg normalized: return normalized lacunarity
-        :type verb: bool
-         :arg verb: print all regression parameters
-        :type regr_param: bool
-         :arg regr_param: return all regression parameters as dictionary
-         
-        :rtype: (optional) tuple/float number/dictionary
-         :return: one of a) box sizes and lacunarities, b) slope of the lac.-regression or
-                  c) full set of regression parameters
+        >>> np.random.seed(123)
+        >>> x = np.cumsum(np.random.normal(0,1,1000))
+        >>> wmin, wmax, N = 0, 2, 100
+        >>> a_boxes = 2*np.unique(np.logspace(wmin, wmax, N, dtype=int))
+        >>> # run the box-counting algorithm
+        >>> BC = bc.Boxcount(x, method='distance', thresh=2, boxes=a_boxes, glide=False)
+        >>> # compute the scaling exponent of the lacunarity curve:
+        >>> BC.lacunarity(regression='ML', verb=True)
+            {'yinterc': -0.9993807492735187, 'slope': 0.47489832293698464, 'stderr': 0.3132253202577394, 'R': 7.104566369637574}
+            0.47489832293698464
+    
+    - Return the lacunarity values obtained for each box size:
+        
+        >>> t_lac = BC.lacunarity(regression=None, verb=False)
+        >>> t_lac[1]
+        array([0.9631434 , 0.92429532, ..., 0.43207166])
         """
         a_lac = np.zeros(self.N)
         for n in range(self.N):
@@ -338,31 +448,59 @@ class Boxcount(RP):
 
 
 
+
+
     def resample_counts(self, output, Nb, regression, **kwargs):
         """
         Bootstrap resampling of recurrence plot box counts. Can be used to obtain confidence intervals
         for the box-counting dimension or recurrence lacunarity. 
         For more information, see
-        >Braun, Tobias, et al. "Detection of dynamical regime transitions with lacunarity as a 
-        multiscale recurrence quantification measure." Nonlinear Dynamics (2021): 1-19.<
-
-        .. note::
-           This is not equivalent to the hypothesis test performed in (Braun et al 2020) as it is
-           not a test against the hypothesis of stationarity!
+        
+        
+    .. note::
+           This is not equivalent to the hypothesis test performed in (Braun et al 2020, see references) 
+           as it is not a test against the hypothesis of stationarity!
            Moreover, in each boostrap runs 'M' boxes are sampled which can not be changed as of now.
 
         
-        :type output: str
-         :arg output: choose between box-counting dimension ('boxdim') or lacunarity ('lac')
-        :type Nb: int number
-         :arg Nb: number of bootstrap runs
-        :type regression: bool
-         :arg regression: print all regression parameters
+    Parameters
+    ----------
+        output: str
+            choose between box-counting dimension ('boxdim') or lacunarity ('lac')
+        Nb: int
+            number of bootstrap runs
+        regression : bool
+            print all regression parameters
 
-        :rtype: (optional) float list 
-         :return: list (Nb elements) of either the bootstrapped box-counting dimensions,
-                  recurrence lacunarities or regression parameters of the recurrence lacunarities
+    Returns
+    -------
+        : list (float)
+            list (Nb elements) of either the bootstrapped box-counting dimensions, 
+            recurrence lacunarities or regression parameters of the recurrence lacunarities
 
+    References
+    -------
+        Braun, Tobias, et al. "Detection of dynamical regime transitions with lacunarity as a 
+        multiscale recurrence quantification measure." Nonlinear Dynamics (2021): 1-19.
+
+
+    Examples
+    --------
+    - Create an instance of Boxcount for a realization of a random walk. Generate a recurrence plot
+      and analyse it with the static box-counting algorithm and a logarithmically increasing set of boxes.
+      Compute the box-counting dimension with maximum likelihood regression and print regression parameters.
+        
+        >>> np.random.seed(123)
+        >>> x = np.cumsum(np.random.normal(0,1,1000))
+        >>> wmin, wmax, N = 0, 2, 100
+        >>> a_boxes = 2*np.unique(np.logspace(wmin, wmax, N, dtype=int))
+        >>> # run the box-counting algorithm
+        >>> BC = bc.Boxcount(x, method='distance', thresh=2, boxes=a_boxes, glide=False)
+        >>> # resample the distribution of box counts five times and compute scaling parameters 
+        >>> # of the lacunarity ncurves based on least-squares regression.
+        >>> BC.resample_counts(output='lac', Nb=100, regression='LS')
+            [-0.39592862611100216, -0.3874059856063104, -0.3902924508180553, -0.3791413046318648, -0.3862428074579492]
+    
         """
         ## iterate through 'Nb' bootstrap runs whereas each one samples the counts 'M' times
         l_stat_distr = []
