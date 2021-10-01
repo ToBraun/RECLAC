@@ -26,7 +26,7 @@ scipy >= 1.2.1
 Documentation
 =============
 
-I am currently working on a comprehensive documentation.
+A tutorial for getting started is provided as a jupyter notebook (tutorial.ipynb). 
 
 
 Citing and reference
