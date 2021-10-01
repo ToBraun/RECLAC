@@ -12,105 +12,118 @@ import scipy
 
 class RP:
     
-    """
-    Class RP for computing recurrence plots from univariate time series.
-
-    The recurrence_plot class supports time-delay embedding of multi-dimensional time series with
-    known embedding dimension and delay, computation of euclidean distance matrices and
-    computation of recurrence matrices based on four common threshold selection criteria.
-    
-    Note that this is a very sparse implementation with limited functionality and more
-    comprehensive implementations (incl. embedding, parameter estimation, RQA...) can be found elsewhere.
-    For a comprehensive summary of the recurrence plot method refer to [Marwan2007].
-
-    **Examples:**
-
-     - Create an instance of RP with fixed recurrence rate of 10%
-       and without embedding:
-
-           RP(x=time_series, method='frr', thresh=0.1)
-
-     - Create an instance of RP with a fixed recurrence threshold
-       in units of the time series standard deviation (2*stdev) and with embedding:
-
-           RP(x=time_series, dim=2, tau=3, method='stdev', thresh=2)
-           
-       Obtain the recurrence matrix:
-           
-           RP(x=time_series, dim=2, tau=3, method='stdev', thresh=2).rm()
-    """
-    
-    def __init__(self, x, method, thresh, **kwargs):
+    def __init__(self, x, method, thresh, compute_rp=True, **kwargs):        
         """
-        Initialize an instance of RP.
+        Class RP for computing recurrence plots from univariate time series.
 
-        The following keywords are required: method, thresh
-        The dim, tau keywords are optional.
-
+        The recurrence_plot class supports time-delay embedding of multi-dimensional time series with
+        known embedding dimension and delay, computation of euclidean distance matrices and
+        computation of recurrence matrices based on four common threshold selection criteria.
+        Note that this is a very sparse implementation with limited functionality and more
+        comprehensive implementations (incl. embedding, parameter estimation, RQA...) can be found elsewhere.
+        For a comprehensive summary of the recurrence plot method refer to [Marwan2007].
+            
         If given a univariate/scalar time series, embedding parameters may be specified to apply
         time-delay embedding. If the time series multi-dimensional (non-scalar), no embedding
         can be applied and the input is treated as an embedded time series.
+        If a recurrence plot should be given as input, 'compute_rp' has to be set to False.
+        
+    Parameters
+    ----------
+        x: 2D array (time, dimension)
+            The time series to be analyzed, can be scalar or multi-dimensional.
+        dim : int, optional
+            embedding dimension (>1)
+        tau : int, optional
+            embedding delay
+        method : str
+             estimation method for the vicinity threshold 
+             epsilon (`distance`, `frr`, `stdev`, `fan`)
+        thresh: float
+            threshold parameter for the vicinity threshold,
+            depends on the specified method (`epsilon`, 
+            `recurrence rate`, `multiple of standard deviation`,
+            `fixed fraction of neighbours`)
+        
+        
+    Examples
+    --------
+        
+    - Create an instance of RP with fixed recurrence rate of 10%
+      and without embedding:
 
-        :type x: 2D array (time, dimension)
-         :arg x: The time series to be analyzed, can be scalar or
-            multi-dimensional.
-        :type dim: int
-         :arg int dim: embedding dimension (>1)
-        :type tau: int
-         :arg tau: embedding delay
-        :type method: str
-         :arg method: estimation method for the vicinity threshold 
-                      epsilon (`distance`, `frr`, `stdev`, `fan`)
-        :type thresh: float
-         :arg thresh: threshold parameter for the vicinity threshold,
-                     depends on the specified method (`epsilon`, 
-                    `recurrence rate`, `multiple of standard deviation`,
-                    `fixed fraction of neighbours`)
-        """
+           >>> import RECLAC.recurrence_plot as rec
+           >>> RP(x=time_series, method='frr', thresh=0.1)
+           
+    - Create an instance of RP with a fixed recurrence threshold
+      in units of the time series standard deviation (2*stdev) and with embedding:
+
+           >>> RP(x=time_series, dim=2, tau=3, method='stdev', thresh=2)
+    
+    - Obtain the recurrence matrix:
+           
+           >>> a_rm = RP(x=time_series, dim=2, tau=3, method='stdev', thresh=2).rm()
+    """
+        
         #  Store time series as float
         self.x = x.copy().astype("float32")
         self.method = method
         self.thresh = thresh 
         
-        #  Apply time-delay embedding: get embedding dimension and delay from **kwargs
-        self.dim = kwargs.get("dim")
-        self.tau = kwargs.get("tau")
-        if self.dim is not None and self.tau is not None:
-            assert (self.dim > 0) and (self.tau>0), "Negative embedding parameter(s)!"
-            #  Embed the time series
-            self.embedding = self.embed()
-        elif (self.dim is not None and self.tau is None) or (self.dim is None and self.tau is not None):
-            raise NameError("Please specify either both or no embedding parameters.")
+        if compute_rp:
+            #  Apply time-delay embedding: get embedding dimension and delay from **kwargs
+            self.dim = kwargs.get("dim")
+            self.tau = kwargs.get("tau")
+            if self.dim is not None and self.tau is not None:
+                assert (self.dim > 0) and (self.tau>0), "Negative embedding parameter(s)!"
+                #  Embed the time series
+                self.embedding = self.embed()
+            elif (self.dim is not None and self.tau is None) or (self.dim is None and self.tau is not None):
+                raise NameError("Please specify either both or no embedding parameters.")
+            else:
+                if x.ndim > 1:
+                    self.embedding = self.x
+                else: 
+                    self.embedding = self.x.reshape(x.size,1)
+            
+            # default metric: euclidean
+            self.metric = kwargs.get("metric")
+            if self.metric is None:
+                self.metric = 'euclidean'
+            assert (type(self.metric) is str), "'metric' must specified as string!"
+    
+            # Set threshold based on one of the four given methods (distance, fixed rr, fixed stdev, fan)
+            # and compute recurrence matrix:
+            self.R = self.apply_threshold()
+            # 'back-up' (private) variable for self.counts to restore value when self.counts is altered
+            self._R = np.copy(self.R)
+        # RP is passed as x argument
         else:
-            if x.ndim > 1:
-                self.embedding = self.x
-            else: 
-                self.embedding = self.x.reshape(x.size,1)
-        
-        # default metric: euclidean
-        self.metric = kwargs.get("metric")
-        if self.metric is None:
-            self.metric = 'euclidean'
-        assert (type(self.metric) is str), "'metric' must specified as string!"
+            assert (x.ndim == 2), "If a recurrence matrix is provided, it has to be a 2-dimensional array."
+            assert ~np.all(np.isnan(x)), "Recurrence matrix only contains NaNs."
+            self.R = x
 
-        # Set threshold based on one of the four given methods (distance, fixed rr, fixed stdev, fan)
-        # and compute recurrence matrix:
-        self.R = self.apply_threshold()
-        # 'back-up' (private) variable for self.counts to restore value when self.counts is altered
-        self._R = np.copy(self.R)
 
 
     
     def apply_threshold(self):
         """
         Apply thresholding to the distance matrix by one of four methods:
-            *  'distance': no method, expects value for vicinity threshold
-            *  'frr': fixed recurrence rate, expects specification of distance-distr. quantile (.xx) 
-            *  'stdev': standard deviation of time series, expects multiple of standard deviation
-            *  'fan': fixed amounbt of neighbors, expects fraction of fixed neighbors
+            
+        *  'distance': no method, expects value for vicinity threshold
+        
+        *  'frr': fixed recurrence rate, expects specification of distance-distr. quantile (.xx) 
+        
+        *  'stdev': standard deviation of time series, expects multiple of standard deviation
+        
+        *  'fan': fixed amounbt of neighbors, expects fraction of fixed neighbors
 
-        :rtype: 2D array (integer)
-         :return: recurrence matrix
+        
+    Returns
+    -------
+        
+        R: 2D array (integer)
+            recurrence matrix
         """
         # compute distance matrix
         dist = RP.dist_mat(self, metric=self.metric)
@@ -147,8 +160,16 @@ class RP:
         'hamming', 'jaccard', 'jensenshannon', 'kulsinski', 'mahalanobis', 'matching', 'minkowski',
         'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'
         
-        :rtype: 2D array (float)
-         :return: distance matrix
+    Parameters
+    ----------
+        metric: str
+            Metric that is used for distance computation.
+        
+    Returns
+    -------
+        
+        R: 2D array (float)
+            distance matrix
         """
         z = self.embedding
         # using the scipy.spatial implementation:
@@ -164,8 +185,11 @@ class RP:
         """
         Time-delay embedding: embeds a scalar time series 'x' in 'dim' dimensions with time delay 'tau'.
 
-        :rtype: 2D array (float)
-         :return: embedded time series
+    Returns
+    -------
+        
+        R: 2D array (float)
+             embedded time series
         """
         K = (self.dim-1)*self.tau
         assert (K<self.x.size), "Choice of embedding parameters exceeds time series length."
@@ -178,8 +202,11 @@ class RP:
         """
         Returns the (square) recurrence matrix.
 
-        :rtype: 2D array (int)
-         :return: recurrence matrix
+    Returns
+    -------
+        
+        R: 2D array (int)
+             recurrence matrix
         """
         return self.R
     
@@ -192,16 +219,43 @@ class RP:
         line lengths and the line length histogram.
         Since the length of border lines is generally unknown, they can be discarded or
         replaced by the mean/max line length.
-
         
-        :type linetype: str
-         :arg linetype: specifies whether diagonal ('diag') or vertical ('vert') lines
-                        should be extracted
-        :type border: str
-         :arg border: treatment of border lines: None, 'discard', 'mean' or 'max'
+    Parameters
+    ----------
+        linetype: str
+            specifies whether diagonal ('diag') or vertical ('vert') lines
+            should be extracted
+        border: str, optional
+            treatment of border lines: None, 'discard', 'kelo', 'mean' or 'max'
+        
+        
+    Returns
+    -------
+        
+        a_ll, a_bins, a_lhist: tuple of three 1D float arrays
+            line lengths, bins, histogram
+            
+    Examples
+    --------
+        
+    - Create an instance of RP with fixed recurrence rate of 10% for a noisy
+      sinusoidal and obtain the diagonal line length histogram without border lines:
 
-        :rtype: tuple of three 1D float arrays
-         :return: line lengths, bins, histogram
+        >>> import RECLAC.recurrence_plot as rec
+        >>> # sinusoidal with five periods and superimposed white Gaussian noise
+        >>> a_ts = np.sin(2*math.pi*np.arange(100)/20) + np.random.normal(0, .25, 100)
+        >>> # define a recurrence plot instance with a fixed recurrence rate of 10%
+        >>> RP = rec.RP(a_ts, method='frr', dim=2, per=5, thresh=.1)
+        >>> # obtain line histogram for diagonal lines while border lines are discarded
+        >>> _, a_bins, a_freqs = RP.line_hist(linetype='diag', border='discard')
+        >>> a_bins, a_freqs
+        (array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5]), array([152,  60,  16,  11,   1]))
+           
+    - Obtain the vertical line length histogram with no action on border lines:
+
+        >>> _, a_vbins, a_vfreqs = RP.line_hist(linetype='vert', border=None)
+        >>> a_vbins, a_vfreqs
+        (array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5]), array([268, 158,  71,  18,   5]))
         """
         N = self.R.shape[0]
         a_ll = np.array([])
@@ -238,6 +292,9 @@ class RP:
                 elif border == 'max':
                     maxll = np.max(a_ll)
                     a_ll = np.hstack([a_ll, np.repeat(maxll, counter)])
+                elif border == 'kelo':
+                    maxll = np.max(a_ll)
+                    a_ll = np.hstack([a_ll, maxll])
         
         # any lines?
         if a_ll.size > 0:                
@@ -255,16 +312,20 @@ class RP:
         Extracts the n-th diagonal/column from a recurrence matrix, depending on
         whether diagonal (linetype='diag') or vertical (linetype='vert') lines are
         desired.
-
-
-        :type n: int
-         :arg n: index of diagonal/column of the RP (0 corresponds to LOI for diagonals)
-        :type linetype: str
-         :arg linetype: specifies whether diagonal ('diag') or vertical ('vert') lines
-                        should be extracted
-
-        :rtype: 1D float array
-         :return: n-th diagonal/column of recurrence matrix
+        
+    Parameters
+    ----------
+        n: int
+            index of diagonal/column of the RP (0 corresponds to LOI for diagonals)
+        linetype: str
+            specifies whether diagonal ('diag') or vertical ('vert') lines
+            should be extracted
+        
+    Returns
+    -------
+        
+        1D float array
+            n-th diagonal/column of recurrence matrix
         """
         if linetype == 'diag':
             return np.diag(self.R, n)
@@ -282,11 +343,16 @@ class RP:
         Applied to binary sequences (diagonals/columns of recurrence matrix) to obtain
         line lengths.
         
-        :type sequence: 1D float array
-         :arg sequence: sequence of values (0s and 1s for recurrence plots)
+    Parameters
+    ----------
+        sequence: 1D float array
+            sequence of values (0s and 1s for recurrence plots)
 
-        :rtype: 2D float array
-         :return: run values (first column) and run lengths (second column)
+    Returns
+    -------
+        
+        2D float array
+            run values (first column) and run lengths (second column)
         """
         #src:  https://github.com/alimanfoo
        ## Run length encoding: Find runs of consecutive items in an array.
@@ -324,15 +390,20 @@ class RP:
         Returns the fraction of lines that are longer than 'lmin' based on the line
         length histogram. For diagonal (vertical) lines, this corresponds to DET (LAM).
         
-        :type bins: 1D float array
-         :arg bins: bins of line length histogram
-        :type hist: 1D float array
-         :arg hist: frequencies of line lengths within each bin 
-        :type lmin: int value
-         :arg lmin: minimum line length
-         
-        :rtype: float value
-         :return: fraction of diagonal/vertical lines that exceed 'lmin' (DET/LAM)
+    Parameters
+    ----------
+        bins: 1D float array
+            bins of line length histogram
+        hist: 1D float array
+            frequencies of line lengths within each bin 
+        lmin: int value
+             minimum line length
+
+    Returns
+    -------
+        
+        rq: float value
+            fraction of diagonal/vertical lines that exceed 'lmin' (DET/LAM)
         """
         # find fraction of lines larger than lmin
         a_Pl = hist.astype('float')
@@ -364,16 +435,52 @@ class RP:
         If only quantifiers based on diagonal/vertical/white lines are desired, this can
         be restricted with the 'measure' argument.
         
-        :type lmin: int value
-         :arg lmin: minimum line length
-        :type measures: str
-         :arg measures: determines which recurrence quantification measures are computed
-                        ('all', 'diag', 'vert', 'white')
-        :type border: str
-         :arg border: treatment of border lines: None, 'discard', 'mean' or 'max'
+        
+    Parameters
+    ----------
+        lmin: int value
+             minimum line length
+        measures: str
+            determines which recurrence quantification measures are computed
+            ('all', 'diag', 'vert', 'white')
+        border: str
+            treatment of border lines: None, 'discard', 'mean' or 'max'
          
-        :rtype: float dictionary
-         :return: recurrence quantification measures
+            
+    Returns
+    -------
+        
+        d_rqa: float dictionary
+            recurrence quantification measures
+            
+    Examples
+    --------
+        
+    - Create an instance of RP with fixed recurrence rate of 10% for a noisy
+      sinusoidal and run a full recurrence quantification analysis:
+
+        >>> import RECLAC.recurrence_plot as rec
+        >>> # sinusoidal with five periods and superimposed white Gaussian noise
+        >>> a_ts = np.sin(2*math.pi*np.arange(100)/20) + np.random.normal(0, .25, 100)
+        >>> # define a recurrence plot instance with a fixed recurrence rate of 10%
+        >>> RP = rec.RP(a_ts, method='frr', thresh=.1)
+        >>> # compute all RQA measures with no border correction:
+        >>> RP.RQA(lmin=2, measures='all', border=None)
+        {'RR': 0.10005540166204986,
+        'DET': 0.6064356435643564,'avgDL': 2.5257731958762886,'maxDL': 9,
+         'LAM': 0.7002237136465325,'avgVL': 2.484126984126984,'maxVL': 5,
+         'avgWVL': 15.614931237721022,'maxWVL': 86}
+
+
+    - Run only a recurrence quantification analysis that considers diagonal measures
+      on lines of minimum length 3 whereas border lines are set to the average diagonal 
+      line length:
+
+        >>> RP.RQA(lmin=3, measures='diag', border='mean')
+        {'RR': 0.10005540166204986,
+         'DET': 0.12262958280657396,'avgDL': 3.4642857142857144,'maxDL': 5,
+         'LAM': None, 'avgVL': None, 'maxVL': None,
+         'avgWVL': None, 'maxWVL': None} 
         """
         DET, avgDL, maxDL, LAM, avgVL, maxVL, avgWL, maxWL = np.repeat(None, 8)
         # recurrence rate
@@ -382,20 +489,23 @@ class RP:
         if (measures == 'diag') or (measures == 'all'):
             a_ll, a_bins, a_nlines  = self.line_hist(linetype='diag', border=border)
             DET = RP._fraction(bins = a_bins, hist = a_nlines, lmin = lmin)
-            avgDL = np.mean(a_ll)
-            maxDL = np.max(a_ll).astype(int)
+            a_llsub = a_ll[a_ll >= lmin]
+            avgDL = np.mean(a_llsub)
+            maxDL = np.max(a_llsub).astype(int)
         # vertical line structures
         if (measures == 'vert') or (measures == 'all'):
             a_ll, a_bins, a_nlines  = self.line_hist(linetype='vert', border=border)
             LAM = RP._fraction(bins = a_bins, hist = a_nlines, lmin = lmin)
-            avgVL = np.mean(a_ll)
-            maxVL = np.max(a_ll).astype(int)
+            a_llsub = a_ll[a_ll >= lmin]
+            avgVL = np.mean(a_llsub)
+            maxVL = np.max(a_llsub).astype(int)
         # white vertical line structures/ recurrence times
         if (measures == 'white') or (measures == 'all'):
             self.R = 1 - self.R
             a_ll, a_bins, a_nlines  = self.line_hist(linetype='vert', border=border)
-            avgWL = np.mean(a_ll)
-            maxWL = np.max(a_ll).astype(int)
+            a_llsub = a_ll[a_ll >= lmin]
+            avgWL = np.mean(a_llsub)
+            maxWL = np.max(a_llsub).astype(int)
             # restore value
             self.R = self._R
         
